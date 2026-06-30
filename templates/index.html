@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Last-Minute Life Saver</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+
+    <div class="container">
+
+        <header class="app-header">
+            <h1>⏰ Last-Minute Life Saver</h1>
+            <p class="tagline">Stop missing deadlines. Let AI prioritize your chaos.</p>
+        </header>
+
+        <main>
+            <section class="input-section">
+                <label for="taskInput">Dump your tasks/deadlines here</label>
+                <textarea
+                    id="taskInput"
+                    rows="6"
+                    placeholder="e.g. Assignment due tomorrow 9am, meeting Friday 3pm, exam Monday"
+                ></textarea>
+
+                <label for="contextInput">Any context that affects your schedule? (optional)</label>
+                <textarea
+                    id="contextInput"
+                    rows="3"
+                    placeholder="e.g. low energy mornings, no time on weekends"
+                ></textarea>
+
+                <button id="saveMeBtn">🚨 Save Me!</button>
+            </section>
+
+            <section id="loadingState" class="loading-state hidden">
+                <div class="spinner"></div>
+                <p>Analyzing your chaos...</p>
+            </section>
+
+            <section id="errorState" class="error-state hidden">
+                <p id="errorMessage"></p>
+            </section>
+
+            <!-- ========== RESULTS ========== -->
+            <section id="resultsSection" class="results-section hidden">
+
+                <!-- FEATURE 6: Panic Meter Gauge -->
+                <div class="panic-meter" id="panicMeter">
+                    <h2>🔥 Panic Meter</h2>
+                    <div class="gauge-container">
+                        <svg viewBox="0 0 200 115" class="gauge-svg">
+                            <!-- Background track -->
+                            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#1a1a24" stroke-width="18" stroke-linecap="round"/>
+                            <!-- Green segment (0-30%) -->
+                            <path d="M 22 100 A 78 78 0 0 1 52 36" fill="none" stroke="#2ecc71" stroke-width="12" stroke-linecap="round" opacity="0.85"/>
+                            <!-- Yellow segment (30-55%) -->
+                            <path d="M 55 34 A 78 78 0 0 1 115 22" fill="none" stroke="#f1c40f" stroke-width="12" opacity="0.85"/>
+                            <!-- Orange segment (55-80%) -->
+                            <path d="M 118 23 A 78 78 0 0 1 162 57" fill="none" stroke="#ff9800" stroke-width="12" opacity="0.85"/>
+                            <!-- Red segment (80-100%) -->
+                            <path d="M 164 60 A 78 78 0 0 1 178 100" fill="none" stroke="#ff3b3b" stroke-width="12" stroke-linecap="round" opacity="0.85"/>
+                            <!-- Tick marks -->
+                            <line x1="20" y1="100" x2="20" y2="92" stroke="#3a3a45" stroke-width="1.5"/>
+                            <line x1="100" y1="20" x2="100" y2="28" stroke="#3a3a45" stroke-width="1.5"/>
+                            <line x1="180" y1="100" x2="180" y2="92" stroke="#3a3a45" stroke-width="1.5"/>
+                            <!-- Needle -->
+                            <g id="gaugeNeedle" class="gauge-needle">
+                                <line x1="100" y1="100" x2="100" y2="32" stroke="#f0f0f5" stroke-width="2.5" stroke-linecap="round"/>
+                                <polygon points="97,40 103,40 100,28" fill="#f0f0f5"/>
+                            </g>
+                            <!-- Center dot -->
+                            <circle cx="100" cy="100" r="7" fill="#f0f0f5"/>
+                            <circle cx="100" cy="100" r="3.5" fill="#0e0e12"/>
+                        </svg>
+                        <div class="gauge-score" id="gaugeScore">0%</div>
+                        <div class="gauge-label" id="gaugeLabel">Calculating...</div>
+                    </div>
+                    <div class="gauge-labels-row">
+                        <span style="color:#2ecc71">😎 Chill</span>
+                        <span style="color:#f1c40f">😬 Close</span>
+                        <span style="color:#ff9800">⚠️ Danger</span>
+                        <span style="color:#ff3b3b">🔥 Panic</span>
+                    </div>
+                </div>
+
+                <!-- Game Plan Summary -->
+                <div class="summary-box">
+                    <h2>Your Game Plan</h2>
+                    <p id="scheduleSummary"></p>
+                </div>
+
+                <!-- Task Cards -->
+                <div id="taskList" class="task-list"></div>
+
+                <!-- FEATURE 11: "What If I Just... Don't?" -->
+                <div class="what-if-section" id="whatIfSection">
+                    <button id="whatIfBtn" class="what-if-btn">🤷 What if I just... don't?</button>
+                    <div id="whatIfLoading" class="what-if-loading hidden">
+                        <div class="spinner" style="width:28px;height:28px;border-width:2px;"></div>
+                        <span>Imagining your doom...</span>
+                    </div>
+                    <div id="whatIfResponse" class="what-if-response hidden"></div>
+                </div>
+
+            </section>
+        </main>
+
+        <footer class="app-footer">
+            <p>Built with Gemini AI · Vibe2Ship Hackathon</p>
+        </footer>
+
+    <!-- Motivational Dog Pet -->
+    <div id="dogContainer" class="dog-container">
+        <div id="dogBubble" class="dog-bubble">Zzz... wake me up when there's chaos to prioritize! 💤</div>
+        <div class="dog-wrapper" id="dogWrapper">
+            <span id="dogEmoji">🐶</span>
+        </div>
+    </div>
+
+    <!-- Deadline DJ Sound Toggle -->
+    <button id="soundToggle" class="sound-toggle" title="Toggle urgency sounds (Deadline DJ 🎧)">🔇</button>
+
+    <script>
+        // ===== DOM Elements =====
+        const saveMeBtn     = document.getElementById("saveMeBtn");
+        const taskInput     = document.getElementById("taskInput");
+        const contextInput  = document.getElementById("contextInput");
+        const loadingState  = document.getElementById("loadingState");
+        const errorState    = document.getElementById("errorState");
+        const errorMessage  = document.getElementById("errorMessage");
+        const resultsSection = document.getElementById("resultsSection");
+        const scheduleSummary = document.getElementById("scheduleSummary");
+        const taskList      = document.getElementById("taskList");
+        const soundToggleBtn = document.getElementById("soundToggle");
+        const gaugeNeedle   = document.getElementById("gaugeNeedle");
+        const gaugeScore    = document.getElementById("gaugeScore");
+        const gaugeLabel    = document.getElementById("gaugeLabel");
+        const whatIfBtn     = document.getElementById("whatIfBtn");
+        const whatIfLoading = document.getElementById("whatIfLoading");
+        const whatIfResponse = document.getElementById("whatIfResponse");
+        const dogContainer  = document.getElementById("dogContainer");
+        const dogBubble     = document.getElementById("dogBubble");
+        const dogEmoji      = document.getElementById("dogEmoji");
+        const dogWrapper    = document.getElementById("dogWrapper");
+
+        // ===== State =====
+        let currentTasks = [];
+        let countdownIntervals = [];
+        let soundEnabled = false;
+        let audioCtx = null;
+        let tickIntervalId = null;
+        let alarmIntervalId = null;
+        let currentDogState = 'sleep';
+        let dogSpeechTimeout = null;
+
+        // ===== Urgency Helpers =====
+        function getUrgencyClass(score) {
+            if (score >= 8) return "urgency-high";
+            if (score >= 5) return "urgency-medium";
+            return "urgency-low";
+        }
+
+        // ============================================================
+        // FEATURE 2: Live Countdown Timer
+        // ============================================================
+        function parseDeadline(deadlineStr, deadlineIso) {
+            if (deadlineIso) { const d = new Date(deadlineIso); if (!isNaN(d.getTime())) return d; }
+            if (deadlineStr) { const d = new Date(deadlineStr); if (!isNaN(d.getTime())) return d; }
+            return null;
+        }
+
+        function formatCountdown(ms) {
+            if (ms <= 0) return "⚠️ OVERDUE!";
+            const t = Math.floor(ms / 1000);
+            const d = Math.floor(t / 86400), h = Math.floor((t % 86400) / 3600);
+            const m = Math.floor((t % 3600) / 60), s = t % 60;
+            if (d > 0) return `⏳ ${d}d ${h}h ${m}m remaining`;
+            if (h > 0) return `⏳ ${h}h ${m}m ${s}s remaining`;
+            return `⏳ ${m}m ${s}s remaining`;
+        }
+
+        function clearAllCountdowns() {
+            countdownIntervals.forEach(id => clearInterval(id));
+            countdownIntervals = [];
+        }
+
+        // ============================================================
+        // FEATURE 13: Deadline DJ — Web Audio API
+        // ============================================================
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playTick() {
+            if (!audioCtx || !soundEnabled) return;
+            try {
+                const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+                o.connect(g); g.connect(audioCtx.destination);
+                o.frequency.value = 880; o.type = 'sine';
+                g.gain.setValueAtTime(0.06, audioCtx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.04);
+                o.start(audioCtx.currentTime); o.stop(audioCtx.currentTime + 0.04);
+            } catch(e) {}
+        }
+
+        function playAlarm() {
+            if (!audioCtx || !soundEnabled) return;
+            try {
+                for (let i = 0; i < 3; i++) {
+                    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+                    o.connect(g); g.connect(audioCtx.destination);
+                    o.frequency.value = 1200; o.type = 'square';
+                    const t = audioCtx.currentTime + i * 0.25;
+                    g.gain.setValueAtTime(0.05, t);
+                    g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+                    o.start(t); o.stop(t + 0.18);
+                }
+            } catch(e) {}
+        }
+
+        function startUrgencySounds() {
+            stopUrgencySounds();
+            if (!soundEnabled || currentTasks.length === 0) return;
+            const ut = currentTasks.filter(t => t.urgency >= 8 && !t._completed).sort((a,b) => b.urgency - a.urgency)[0];
+            if (!ut) return;
+            const dl = parseDeadline(ut.deadline, ut.deadline_iso);
+            if (!dl) return;
+            const ms = dl.getTime() - Date.now();
+            if (ms <= 0) { playAlarm(); alarmIntervalId = setInterval(playAlarm, 10000); }
+            else if (ms <= 30*60*1000) { tickIntervalId = setInterval(playTick, 500); playAlarm(); alarmIntervalId = setInterval(playAlarm, 8000); }
+            else if (ms <= 2*60*60*1000) { tickIntervalId = setInterval(playTick, 1000); }
+        }
+
+        function stopUrgencySounds() {
+            if (tickIntervalId)  { clearInterval(tickIntervalId);  tickIntervalId  = null; }
+            if (alarmIntervalId) { clearInterval(alarmIntervalId); alarmIntervalId = null; }
+        }
+
+        soundToggleBtn.addEventListener("click", () => {
+            soundEnabled = !soundEnabled;
+            soundToggleBtn.textContent = soundEnabled ? "🔊" : "🔇";
+            soundToggleBtn.classList.toggle("active", soundEnabled);
+            if (soundEnabled) { initAudio(); startUrgencySounds(); } else { stopUrgencySounds(); }
+        });
+
+        // ============================================================
+        // FEATURE 3: Confetti Celebration
+        // ============================================================
+        function triggerConfetti() {
+            if (typeof confetti !== 'function') return;
+            confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#4f9dff','#ff6b5e','#2ecc71','#ffab40','#ff4f7b'] });
+            setTimeout(() => {
+                confetti({ particleCount: 80, spread: 120, origin: { y: 0.5, x: 0.25 } });
+                confetti({ particleCount: 80, spread: 120, origin: { y: 0.5, x: 0.75 } });
+            }, 250);
+            setTimeout(() => confetti({ particleCount: 60, spread: 160, origin: { y: 0.4 }, colors: ['#2ecc71','#4f9dff'] }), 600);
+        }
+
+        function checkAllCompleted() {
+            const boxes = document.querySelectorAll('.task-checkbox');
+            if (boxes.length === 0) return;
+            if (Array.from(boxes).every(cb => cb.checked)) {
+                stopUrgencySounds();
+                triggerConfetti();
+                updateDogState('happy', "SUCH PRODUCTIVITY! Much wow! You finished everything! 🎉🐕");
+            }
+        }
+
+        // ============================================================
+        // FEATURE: Motivational Dog Pet Controller
+        // ============================================================
+        function updateDogState(state, customText = null) {
+            currentDogState = state;
+            
+            // Remove previous dog classes
+            dogWrapper.className = "dog-wrapper";
+            
+            let emoji = "🐶";
+            let speech = "";
+
+            if (state === 'sleep') {
+                emoji = "💤 🐶";
+                speech = customText || "Zzz... Wake me up when there is chaos to prioritize.";
+                dogWrapper.classList.add("dog-sleep");
+            } else if (state === 'idle') {
+                emoji = "🐶";
+                speech = customText || "You've got this! Let's clear these tasks one by one! 🐾";
+                dogWrapper.classList.add("dog-idle");
+            } else if (state === 'panic') {
+                emoji = "😱 🐕";
+                speech = customText || "Oh snap! Deadlines are barking! Faster! 🐕💨";
+                dogWrapper.classList.add("dog-panic");
+            } else if (state === 'happy') {
+                emoji = "🎉 🐩";
+                speech = customText || "Much wow! Good job! Keep it up! 🐕🌟";
+                dogWrapper.classList.add("dog-happy");
+            }
+
+            dogEmoji.textContent = emoji;
+            dogBubble.textContent = speech;
+        }
+
+        // Click dog for random motivation/interaction
+        dogWrapper.addEventListener("click", () => {
+            if (currentTasks.length === 0) {
+                updateDogState('idle', "Fill out the list above and let's get busy! 🦴");
+                setTimeout(() => {
+                    if (currentTasks.length === 0) updateDogState('sleep');
+                }, 4000);
+                return;
+            }
+
+            // Temp bark
+            const oldState = currentDogState;
+            const barks = [
+                "Bark! Stop reading my bubbles and do your work! 🐾",
+                "Work hard now, nap later! (That's my philosophy) 💤",
+                "I believe in you! Even if you did wait until the last minute! 🤫",
+                "Every checkmark makes me wag my tail! 🐕",
+                "Woof! Need a break? Take 5 mins, then get back to it!"
+            ];
+            const randomBark = barks[Math.floor(Math.random() * barks.length)];
+            
+            updateDogState('happy', randomBark);
+            
+            if (dogSpeechTimeout) clearTimeout(dogSpeechTimeout);
+            dogSpeechTimeout = setTimeout(() => {
+                // Restore state
+                const allDone = currentTasks.length > 0 && currentTasks.every(t => t._completed);
+                if (allDone) {
+                    updateDogState('happy');
+                } else {
+                    const panicScore = calculatePanicScore(currentTasks);
+                    updateDogState(panicScore > 60 ? 'panic' : 'idle');
+                }
+            }, 4000);
+        });
+
+        // Initialize dog as asleep
+        window.addEventListener("DOMContentLoaded", () => {
+            updateDogState('sleep');
+        });
+
+        // ============================================================
+        // FEATURE 6: Panic Meter
+        // ============================================================
+        function calculatePanicScore(tasks) {
+            if (!tasks || tasks.length === 0) return 0;
+            const avg = tasks.reduce((s, t) => s + t.urgency, 0) / tasks.length;
+            const max = Math.max(...tasks.map(t => t.urgency));
+            return Math.min(100, Math.round(max * 6 + avg * 4));
+        }
+
+        function getPanicLabel(score) {
+            if (score <= 20) return { text: "You're actually fine! 😎", color: "#2ecc71" };
+            if (score <= 40) return { text: "Slight procrastination detected 😏", color: "#8bc34a" };
+            if (score <= 60) return { text: "Cutting it close... 😬", color: "#f1c40f" };
+            if (score <= 80) return { text: "Danger zone! ⚠️", color: "#ff9800" };
+            return { text: "FULL PANIC MODE 🔥🔥🔥", color: "#ff3b3b" };
+        }
+
+        function animatePanicMeter(score) {
+            // Reset to leftmost position
+            gaugeNeedle.style.transition = 'none';
+            gaugeNeedle.style.transform = 'rotate(-90deg)';
+            gaugeScore.textContent = '0%';
+            gaugeLabel.textContent = 'Calculating...';
+            gaugeLabel.style.color = '#a0a0b0';
+            gaugeScore.style.color = '#a0a0b0';
+
+            // Force reflow so the reset takes effect before the animation
+            gaugeNeedle.getBoundingClientRect();
+
+            // Animate after a short dramatic pause
+            setTimeout(() => {
+                gaugeNeedle.style.transition = 'transform 1.8s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                const rotation = (score / 100) * 180 - 90;
+                gaugeNeedle.style.transform = `rotate(${rotation}deg)`;
+
+                const label = getPanicLabel(score);
+                gaugeScore.textContent = `${score}%`;
+                gaugeScore.style.color = label.color;
+                gaugeLabel.textContent = label.text;
+                gaugeLabel.style.color = label.color;
+            }, 400);
+        }
+
+        // ============================================================
+        // FEATURE 15: Google Calendar Export
+        // ============================================================
+        function generateGCalUrl(task) {
+            if (!task.deadline_iso) return null;
+            const endDate = new Date(task.deadline_iso);
+            if (isNaN(endDate.getTime())) return null;
+            const startDate = new Date(endDate.getTime() - 60 * 60 * 1000); // 1 hour before
+
+            const pad = (n) => String(n).padStart(2, '0');
+            const fmtLocal = (d) =>
+                `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+
+            const url = new URL('https://calendar.google.com/calendar/render');
+            url.searchParams.set('action', 'TEMPLATE');
+            url.searchParams.set('text', task.task);
+            url.searchParams.set('dates', `${fmtLocal(startDate)}/${fmtLocal(endDate)}`);
+            url.searchParams.set('details',
+                `Urgency: ${task.urgency}/10\n${task.why_it_matters}\n\nSuggested slot: ${task.suggested_time_slot}\n\n— Last-Minute Life Saver`
+            );
+            return url.toString();
+        }
+
+        // ============================================================
+        // FEATURE 11: "What If I Just... Don't?"
+        // ============================================================
+        whatIfBtn.addEventListener("click", async () => {
+            const task_input = taskInput.value.trim();
+            if (!task_input) return;
+
+            whatIfBtn.disabled = true;
+            whatIfLoading.classList.remove("hidden");
+            whatIfResponse.classList.add("hidden");
+
+            try {
+                const res = await fetch("/api/what-if", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ task_input })
+                });
+                const data = await res.json();
+                whatIfLoading.classList.add("hidden");
+                whatIfBtn.disabled = false;
+
+                if (data.error) {
+                    whatIfResponse.innerHTML = `<p style="color:#ff5c5c">Failed to imagine your doom. Try again.</p>`;
+                } else {
+                    const formatted = data.consequence
+                        .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                        .replace(/\n/g, '<br>')
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    whatIfResponse.innerHTML = `<div class="what-if-content">${formatted}</div>`;
+                }
+                whatIfResponse.classList.remove("hidden");
+            } catch (err) {
+                whatIfLoading.classList.add("hidden");
+                whatIfBtn.disabled = false;
+                whatIfResponse.innerHTML = `<p style="color:#ff5c5c">Network error. The universe can't even tell you what goes wrong.</p>`;
+                whatIfResponse.classList.remove("hidden");
+            }
+        });
+
+        // ============================================================
+        // Render Tasks — integrates ALL features
+        // ============================================================
+        function renderTasks(tasks) {
+            taskList.innerHTML = "";
+            clearAllCountdowns();
+            currentTasks = tasks.map(t => ({ ...t, _completed: false }));
+            const sorted = [...currentTasks].sort((a, b) => b.urgency - a.urgency);
+
+            sorted.forEach((task, idx) => {
+                const card = document.createElement("div");
+                card.className = "task-card";
+
+                // FEATURE 8: Pulsing glow for urgency 8+
+                if (task.urgency >= 8) card.classList.add("urgency-critical");
+
+                const deadlineDate = parseDeadline(task.deadline, task.deadline_iso);
+                const showCountdown = task.urgency >= 8 && deadlineDate !== null;
+                const cntId = `countdown-${idx}`;
+                const gcalUrl = generateGCalUrl(task);
+
+                card.innerHTML = `
+                    <div class="task-card-header">
+                        <div class="task-check-wrapper">
+                            <input type="checkbox" class="task-checkbox" id="chk-${idx}" aria-label="Mark ${task.task} complete" />
+                            <h3>${task.task}</h3>
+                        </div>
+                        <span class="urgency-badge ${getUrgencyClass(task.urgency)}">${task.urgency}/10</span>
+                    </div>
+                    <p class="task-deadline"><strong>Deadline:</strong> ${task.deadline}</p>
+                    ${showCountdown ? `<div class="countdown-timer" id="${cntId}"></div>` : ''}
+                    <p class="task-reason">${task.why_it_matters}</p>
+                    <p class="task-slot"><strong>Suggested slot:</strong> ${task.suggested_time_slot}</p>
+                    ${gcalUrl ? `<a href="${gcalUrl}" target="_blank" rel="noopener" class="gcal-btn">📅 Add to Google Calendar</a>` : ''}
+                `;
+
+                taskList.appendChild(card);
+
+                // Checkbox → complete + confetti check
+                const chk = card.querySelector('.task-checkbox');
+                chk.addEventListener('change', () => {
+                    card.classList.toggle('completed', chk.checked);
+                    task._completed = chk.checked;
+                    checkAllCompleted();
+                    if (soundEnabled) startUrgencySounds();
+
+                    // Bark on single task check (if not all done)
+                    const allDone = currentTasks.every(t => t._completed);
+                    if (chk.checked && !allDone) {
+                        updateDogState('happy', "Woof! Task done! Good job! 🦴✨");
+                        if (dogSpeechTimeout) clearTimeout(dogSpeechTimeout);
+                        dogSpeechTimeout = setTimeout(() => {
+                            const panicScore = calculatePanicScore(currentTasks);
+                            updateDogState(panicScore > 60 ? 'panic' : 'idle');
+                        }, 3000);
+                    } else if (!chk.checked) {
+                        // Unchecked task
+                        updateDogState('idle', "Wait, did we undo that? Back to work! 🐾");
+                    }
+                });
+
+                // FEATURE 2: Live countdown for urgent tasks
+                if (showCountdown) {
+                    const el = document.getElementById(cntId);
+                    const tick = () => {
+                        const rem = deadlineDate.getTime() - Date.now();
+                        el.textContent = formatCountdown(rem);
+                        el.classList.toggle('countdown-overdue', rem <= 0);
+                    };
+                    tick();
+                    countdownIntervals.push(setInterval(tick, 1000));
+                }
+            });
+
+            if (soundEnabled) startUrgencySounds();
+        }
+
+        // ===== UI Reset =====
+        function resetUI() {
+            errorState.classList.add("hidden");
+            resultsSection.classList.add("hidden");
+            whatIfResponse.classList.add("hidden");
+            clearAllCountdowns();
+            stopUrgencySounds();
+            updateDogState('sleep');
+        }
+
+        // ===== Main API Call =====
+        async function handleSaveMe() {
+            const task_input = taskInput.value.trim();
+            const user_context = contextInput.value.trim();
+
+            if (!task_input) {
+                resetUI();
+                errorMessage.textContent = "Please enter at least one task or deadline.";
+                errorState.classList.remove("hidden");
+                return;
+            }
+
+            resetUI();
+            loadingState.classList.remove("hidden");
+            saveMeBtn.disabled = true;
+
+            try {
+                const response = await fetch("/api/prioritize", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ task_input, user_context })
+                });
+                const data = await response.json();
+
+                loadingState.classList.add("hidden");
+                saveMeBtn.disabled = false;
+
+                if (!response.ok || data.error) {
+                    errorMessage.textContent = data.error || "Something went wrong. Please try again.";
+                    errorState.classList.remove("hidden");
+                    return;
+                }
+
+                // Show results
+                scheduleSummary.textContent = data.schedule_summary || "";
+                renderTasks(data.tasks || []);
+                resultsSection.classList.remove("hidden");
+
+                // FEATURE 6: Animate Panic Meter (Gemini score with client-side fallback)
+                const panicScore = data.procrastination_score ?? calculatePanicScore(data.tasks || []);
+                animatePanicMeter(panicScore);
+
+                // Update Dog State
+                if (panicScore > 60) {
+                    updateDogState('panic', `Oh snap! Panic score is ${panicScore}%! Deadlines are barking! 🐕💨`);
+                } else {
+                    updateDogState('idle', `Panic level is ${panicScore}%. We can handle this! 🐶`);
+                }
+
+            } catch (err) {
+                loadingState.classList.add("hidden");
+                saveMeBtn.disabled = false;
+                errorMessage.textContent = "Network error. Please check your connection and try again.";
+                errorState.classList.remove("hidden");
+            }
+        }
+
+        saveMeBtn.addEventListener("click", handleSaveMe);
+    </script>
+
+</body>
+</html>
